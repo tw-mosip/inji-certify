@@ -62,6 +62,15 @@ public class CredentialConfigurationServiceImpl implements CredentialConfigurati
     @Value("#{${mosip.certify.data-provider-plugin.credential-status.supported-purposes:{}}}")
     private List<String> credentialStatusSupportedPurposes;
 
+    @Value("#{${mosip.certify.credential-config.cryptographic-binding-methods-supported}}")
+    private LinkedHashMap<String, List<String>> cryptographicBindingMethodsSupportedMap;
+
+    @Value("#{${mosip.certify.credential-config.credential-signing-alg-values-supported}}")
+    private LinkedHashMap<String, List<String>> credentialSigningAlgValuesSupportedMap;
+
+    @Value("#{${mosip.certify.credential-config.proof-types-supported}}")
+    private LinkedHashMap<String, Object> proofTypesSupported;
+
     private static final String CREDENTIAL_CONFIG_CACHE_NAME = "credentialConfig";
 
     @Override
@@ -220,7 +229,7 @@ public class CredentialConfigurationServiceImpl implements CredentialConfigurati
                     .filter(config -> Constants.ACTIVE.equals(config.getStatus()))
                     .forEach(credentialConfig -> {
                         CredentialConfigurationSupportedDTO credentialConfigurationSupported = mapToSupportedDTO(credentialConfig);
-                        credentialConfigurationSupported.setCredentialSigningAlgValuesSupported(credentialConfig.getCredentialSigningAlgValuesSupported());
+                        credentialConfigurationSupported.setCredentialSigningAlgValuesSupported(credentialSigningAlgValuesSupportedMap.get(credentialConfig.getSignatureCryptoSuite()));
                         credentialConfigurationSupportedMap.put(credentialConfig.getCredentialConfigKeyId(), credentialConfigurationSupported);
                     });
             credentialIssuerMetadata.setCredentialConfigurationSupportedDTO(credentialConfigurationSupportedMap);
@@ -238,7 +247,7 @@ public class CredentialConfigurationServiceImpl implements CredentialConfigurati
                     .filter(config -> Constants.ACTIVE.equals(config.getStatus()))
                     .forEach(credentialConfig -> {
                         CredentialConfigurationSupportedDTO credentialConfigurationSupported = mapToSupportedDTO(credentialConfig);
-                        credentialConfigurationSupported.setCryptographicSuitesSupported(credentialConfig.getCredentialSigningAlgValuesSupported());
+                        credentialConfigurationSupported.setCryptographicSuitesSupported(Collections.singletonList(credentialConfig.getSignatureCryptoSuite()));
                         credentialConfigurationSupportedMap.put(credentialConfig.getCredentialConfigKeyId(), credentialConfigurationSupported);
                     });
             credentialIssuerMetadata.setCredentialConfigurationSupportedDTO(credentialConfigurationSupportedMap); // Use a different setter for vd12
@@ -257,7 +266,7 @@ public class CredentialConfigurationServiceImpl implements CredentialConfigurati
                     .forEach(credentialConfig -> {
                         CredentialConfigurationSupportedDTO credentialConfigurationSupported = mapToSupportedDTO(credentialConfig);
                         credentialConfigurationSupported.setId(credentialConfig.getCredentialConfigKeyId());
-                        credentialConfigurationSupported.setCryptographicSuitesSupported(credentialConfig.getCredentialSigningAlgValuesSupported());
+                        credentialConfigurationSupported.setCryptographicSuitesSupported(Collections.singletonList(credentialConfig.getSignatureCryptoSuite()));
                         credentialConfigurationSupportedList.add(credentialConfigurationSupported);
                     });
             credentialIssuerMetadata.setCredentialConfigurationSupportedDTO(credentialConfigurationSupportedList); // Use a different setter for vd11
@@ -278,8 +287,8 @@ public class CredentialConfigurationServiceImpl implements CredentialConfigurati
         CredentialConfigurationDTO credentialConfigurationDTO = credentialConfigMapper.toDto(credentialConfig);
         credentialConfigurationSupported.setFormat(credentialConfigurationDTO.getCredentialFormat());
         credentialConfigurationSupported.setScope(credentialConfigurationDTO.getScope());
-        credentialConfigurationSupported.setCryptographicBindingMethodsSupported(credentialConfigurationDTO.getCryptographicBindingMethodsSupported());
-        credentialConfigurationSupported.setProofTypesSupported(credentialConfigurationDTO.getProofTypesSupported());
+        credentialConfigurationSupported.setCryptographicBindingMethodsSupported(cryptographicBindingMethodsSupportedMap.get(credentialConfig.getCredentialFormat()));
+        credentialConfigurationSupported.setProofTypesSupported(proofTypesSupported);
         credentialConfigurationSupported.setDisplay(credentialConfigurationDTO.getCredentialDisplayConfigs());
         credentialConfigurationSupported.setOrder(credentialConfigurationDTO.getCredentialFieldsDisplayOrder());
 
