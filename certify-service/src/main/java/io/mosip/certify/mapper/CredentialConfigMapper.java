@@ -18,6 +18,9 @@ public interface CredentialConfigMapper {
     @Mapping(target = "credentialStatusPurpose", ignore = true)
     @Mapping(target = "display", source = "credentialDisplayConfigs")
     @Mapping(target = "order", source = "credentialFieldsDisplayOrder")
+    @Mapping(target = "cryptographicBindingMethodsSupported", ignore = true)
+    @Mapping(target = "credentialSigningAlgValuesSupported", ignore = true)
+    @Mapping(target = "proofTypesSupported", ignore = true)
     CredentialConfig toEntity(CredentialConfigurationDTO dto);
 
     // Convert Entity to DTO
@@ -37,6 +40,9 @@ public interface CredentialConfigMapper {
     @Mapping(target = "credentialStatusPurpose", ignore = true)
     @Mapping(target = "display", source = "credentialDisplayConfigs")
     @Mapping(target = "order", source = "credentialFieldsDisplayOrder")
+    @Mapping(target = "cryptographicBindingMethodsSupported", ignore = true)
+    @Mapping(target = "credentialSigningAlgValuesSupported", ignore = true)
+    @Mapping(target = "proofTypesSupported", ignore = true)
     void updateEntityFromDto(CredentialConfigurationDTO dto, @MappingTarget CredentialConfig entity);
 
     @Named("listToCommaSeparatedString")
