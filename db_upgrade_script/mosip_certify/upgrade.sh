@@ -2,6 +2,7 @@
 
 set -e
 properties_file="$1"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo `date "+%m/%d/%Y %H:%M:%S"` ": $properties_file"
 if [ -f "$properties_file" ]
 then
@@ -9,7 +10,11 @@ then
     while IFS='=' read -r key value
     do
         key=$(echo $key | tr '.' '_')
-         eval ${key}=\${value}
+        if [ "$key" = "ACTION" ] && [ -n "$ACTION" ]; then
+          # Skip setting ACTION from file if already set in environment
+          continue
+        fi
+        eval ${key}=\${value}
     done < "$properties_file"
 else
      echo `date "+%m/%d/%Y %H:%M:%S"` ": Property file not found, Pass property file name as argument."
@@ -27,7 +32,8 @@ echo "Terminated connections"
 # Execute upgrade or rollback
 if [ "$ACTION" == "upgrade" ]; then
   echo "Upgrading database from $CURRENT_VERSION to $UPGRADE_VERSION"
-  UPGRADE_SCRIPT_FILE="sql/${CURRENT_VERSION}_to_${UPGRADE_VERSION}_upgrade.sql"
+  UPGRADE_SCRIPT_FILE="$SCRIPT_DIR/sql/${CURRENT_VERSION}_to_${UPGRADE_VERSION}_upgrade.sql"
+  echo "searching for $UPGRADE_SCRIPT_FILE file"
   if [ -f "$UPGRADE_SCRIPT_FILE" ]; then
     echo "Executing upgrade script $UPGRADE_SCRIPT_FILE"
     PGPASSWORD=$SU_USER_PWD psql -v ON_ERROR_STOP=1 --username=$SU_USER --host=$DB_SERVERIP --port=$DB_PORT --dbname=$DEFAULT_DB_NAME -v primary_language_code=$PRIMARY_LANGUAGE_CODE -a -b -f $UPGRADE_SCRIPT_FILE
@@ -37,10 +43,12 @@ if [ "$ACTION" == "upgrade" ]; then
   fi
 elif [ "$ACTION" == "rollback" ]; then
   echo "Rolling back database for $CURRENT_VERSION to $UPGRADE_VERSION"
-  REVOKE_SCRIPT_FILE="sql/${CURRENT_VERSION}_to_${UPGRADE_VERSION}_rollback.sql"
+  REVOKE_SCRIPT_FILE="$SCRIPT_DIR/sql/${CURRENT_VERSION}_to_${UPGRADE_VERSION}_rollback.sql"
   if [ -f "$REVOKE_SCRIPT_FILE" ]; then
     echo "Executing rollback script $REVOKE_SCRIPT_FILE"
-    PGPASSWORD=$SU_USER_PWD psql -v ON_ERROR_STOP=1 --username=$SU_USER --host=$DB_SERVERIP --port=$DB_PORT --dbname=$DEFAULT_DB_NAME -v primary_language_code=$PRIMARY_LANGUAGE_CODE -a -b -f $REVOKE_SCRIPT_FILE
+    set +e
+    PGPASSWORD=$SU_USER_PWD psql -v ON_ERROR_STOP=0 --username=$SU_USER --host=$DB_SERVERIP --port=$DB_PORT --dbname=$DEFAULT_DB_NAME -v primary_language_code=$PRIMARY_LANGUAGE_CODE -a -b -f $REVOKE_SCRIPT_FILE
+    set -e
   else
     echo "rollback script not found, exiting."
     exit 1
