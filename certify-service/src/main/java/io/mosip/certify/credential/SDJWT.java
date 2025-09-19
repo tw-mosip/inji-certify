@@ -22,6 +22,8 @@ import com.authlete.sd.SDObjectBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 import com.nimbusds.jose.PlainHeader;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.PlainJWT;
@@ -79,7 +81,10 @@ public class SDJWT extends Credential{
         String templatedJSON = super.createCredential(templateParams, templateName);
         List<String> sdPaths = super.vcFormatter.getSelectiveDisclosureInfo(templateName);   
         try {
-            
+            if(!validateSDPaths(templatedJSON, sdPaths)){
+                log.error("One or more SD paths are not present in the templated JSON");
+                throw new CertifyException("SD_PATH_VALIDATION_FAILED", "One or more SD paths are not present in the templated JSON");
+            }
             node = objectMapper.readTree(templatedJSON);
             SDJsonUtils.constructSDPayload(node, sdObjectBuilder, disclosures, sdPaths, currentPath);
             Map<String,Object>  sdClaims = sdObjectBuilder.build();
@@ -134,6 +139,51 @@ public class SDJWT extends Credential{
         JWTSignatureResponseDto jwsSignedData = signatureService.jwsSignV2(payload);
         vcResult.setCredential(vcToSign.replaceAll("^[^~]*", jwsSignedData.getJwtSignedData()));
         return vcResult;
+    }
+
+    /**
+     * Validates the SD paths in the given templated JSON against the expected SD paths.
+     *
+     * @param templatedJSON The JSON string with applied templates.
+     * @param expectedSDPaths The list of expected SD paths (e.g., $.credentialSubject.dateOfBirth, $.identityDetails.*, $.fullName[*].value).
+     * @return true if all expected SD paths are present in the templated JSON, false otherwise.
+     */
+    private boolean validateSDPaths(String templatedJSON, List<String> expectedSDPaths) {
+        if (expectedSDPaths == null || expectedSDPaths.isEmpty()) {
+            return true;
+        }
+
+        try {
+            for (String sdPath : expectedSDPaths) {
+                try {
+                    Object result = JsonPath.read(templatedJSON, sdPath);
+
+                    if (result == null) {
+                        log.warn("SD path '{}' not found in templated JSON", sdPath);
+                        return false;
+                    }
+
+                    if (result instanceof List && ((List<?>) result).isEmpty()) {
+                        log.warn("SD path '{}' resolved to empty list in templated JSON", sdPath);
+                        return false;
+                    }
+
+                } catch (PathNotFoundException e) {
+                    log.warn("SD path '{}' not found in templated JSON: {}", sdPath, e.getMessage());
+                    return false;
+                } catch (Exception e) {
+                    log.error("Error evaluating SD path '{}': {}", sdPath, e.getMessage());
+                    return false;
+                }
+            }
+
+            log.debug("All {} SD paths validated successfully", expectedSDPaths.size());
+            return true;
+
+        } catch (Exception e) {
+            log.error("Error during SD path validation", e);
+            return false;
+        }
     }
 
 }
