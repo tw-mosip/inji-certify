@@ -727,7 +727,7 @@ class OAuthControllerTest {
     private IarAuthorizationResponse createMockIarAuthorizationResponse(IarStatus status, String authorizationCode) {
         IarAuthorizationResponse response = new IarAuthorizationResponse();
         response.setStatus(status);
-        response.setAuthorizationCode(authorizationCode);
+        response.setCode(authorizationCode);
         return response;
     }
 }
