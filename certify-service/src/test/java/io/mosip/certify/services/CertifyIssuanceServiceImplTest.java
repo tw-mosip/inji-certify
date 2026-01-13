@@ -1,5 +1,7 @@
 package io.mosip.certify.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -33,6 +35,7 @@ import io.mosip.certify.proof.ProofValidatorFactory;
 import io.mosip.certify.utils.LedgerUtils;
 import io.mosip.certify.validators.CredentialRequestValidator;
 import io.mosip.certify.vcformatters.VCFormatter;
+import io.mosip.pixelpass.PixelPass;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.Before;
@@ -87,6 +90,12 @@ public class CertifyIssuanceServiceImplTest {
     @Mock
     private CredentialLedgerService credentialLedgerService;
 
+    @Mock
+    private PixelPass pixelPass;
+
+    @Mock
+    private ObjectMapper objectMapper;
+
     @InjectMocks
     private CertifyIssuanceServiceImpl issuanceService;
 
@@ -104,7 +113,7 @@ public class CertifyIssuanceServiceImplTest {
 
 
     @Before
-    public void setUp() {
+    public void setUp() throws JsonProcessingException {
         testIssuerMetadataMap = new LinkedHashMap<>();
         LinkedHashMap<String, Object> latestMetadataConfig = new LinkedHashMap<>();
         LinkedHashMap<String, Object> credentialConfigurationsSupportedMapForTestMeta = new LinkedHashMap<>();
@@ -124,10 +133,13 @@ public class CertifyIssuanceServiceImplTest {
 
         ReflectionTestUtils.setField(issuanceService, "cNonceExpireSeconds", 300);
         ReflectionTestUtils.setField(issuanceService, "didUrl", "https://test.issuer.com");
+        ReflectionTestUtils.setField(issuanceService, "domainUrl", "did:example:ldp");
         ReflectionTestUtils.setField(issuanceService, "ledgerUtils", ledgerUtils);
         ReflectionTestUtils.setField(issuanceService, "statusListCredentialService", statusListCredentialService);
         ReflectionTestUtils.setField(issuanceService, "credentialLedgerService", credentialLedgerService);
         ReflectionTestUtils.setField(issuanceService, "defaultExpiryDuration", "P730D");
+        ReflectionTestUtils.setField(issuanceService, "pixelPass", pixelPass);
+        ReflectionTestUtils.setField(issuanceService, "objectMapper", objectMapper);
 
         when(parsedAccessToken.getAccessTokenHash()).thenReturn(TEST_ACCESS_TOKEN_HASH);
 
@@ -194,6 +206,7 @@ public class CertifyIssuanceServiceImplTest {
 
         when(credentialConfigurationService.fetchCredentialIssuerMetadata("latest"))
                 .thenReturn(mockGlobalCredentialIssuerMetadataDTO); // Default mock
+        when(objectMapper.writeValueAsString(any())).thenReturn("claim169-mapped-data");
     }
 
     private CredentialRequest createValidCredentialRequest(String format) {
@@ -661,15 +674,27 @@ public class CertifyIssuanceServiceImplTest {
 
         // Prepare a non-empty QR data array
         JSONArray qrData = new JSONArray();
-        qrData.put(new JSONObject().put("qr", "data1"));
-        qrData.put(new JSONObject().put("qr", "data2"));
+        JSONObject qrData1 = new JSONObject().put("qr", "data1");
+        qrData.put(qrData1);
+        JSONObject qrData2 = new JSONObject().put("qr", "data2");
+        qrData.put(qrData2);
         when(mockW3CJsonLD.createQRData(anyMap(), anyString())).thenReturn(qrData);
 
+        Object mappedData1 = "mappedData1";
+        Object mappedData2 = "mappedData2";
+        when(objectMapper.writeValueAsString(eq(mappedData1))).thenReturn("mappedData1");
+        when(objectMapper.writeValueAsString(eq(mappedData2))).thenReturn("mappedData2");
+        when(pixelPass.getMappedData(eq(qrData1), anyMap(), anyMap(), eq(true))).thenReturn(mappedData1);
+        when(pixelPass.getMappedData(eq(qrData2), anyMap(), anyMap(), eq(true))).thenReturn(mappedData2);
+
         // Mock signQRData to return signed QR strings
-        when(mockW3CJsonLD.signQRData(anyString(), anyString(), anyString(), anyString(), anyString()))
-                .thenReturn("signedQR1")
+        when(mockW3CJsonLD.signQRData(eq("mappedData1"), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn("signedQR1");
+        when(mockW3CJsonLD.signQRData(eq("mappedData2"), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn("signedQR2");
 
+        when(pixelPass.generateQRData(eq("signedQR1"), eq(""))).thenReturn("qrCodeData1");
+        when(pixelPass.generateQRData(eq("signedQR2"), eq(""))).thenReturn("qrCodeData2");
         // Usual formatter mocks
         when(vcFormatter.getProofAlgorithm(anyString())).thenReturn("EdDSA");
         when(vcFormatter.getAppID(anyString())).thenReturn("testAppIdLdp");
@@ -695,8 +720,8 @@ public class CertifyIssuanceServiceImplTest {
         assertTrue(usedParams.containsKey("claim_169_values"));
         List<String> claim169Values = (List<String>) usedParams.get("claim_169_values");
         assertEquals(2, claim169Values.size());
-        assertTrue(claim169Values.contains("signedQR1"));
-        assertTrue(claim169Values.contains("signedQR2"));
+        assertTrue(claim169Values.contains("qrCodeData1"));
+        assertTrue(claim169Values.contains("qrCodeData2"));
     }
 
     @Test
